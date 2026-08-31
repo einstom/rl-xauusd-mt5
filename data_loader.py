@@ -44,12 +44,17 @@ def _read_mt_csv(path: Path) -> pd.DataFrame:
 
     For the second flavour DATE and TIME are combined into a single
     'Time (EET)' column so both continue through one code path.
+
+    A ``.gz`` file is read transparently (handy for keeping the dataset in
+    git under the 100 MB file limit).
     """
-    with open(path, "r", encoding="utf-8-sig") as f:
+    import gzip
+    opener = gzip.open if str(path).endswith(".gz") else open
+    with opener(path, "rt", encoding="utf-8-sig") as f:
         first_line = f.readline()
     sep = "\t" if "\t" in first_line else ","
 
-    df = pd.read_csv(path, sep=sep)
+    df = pd.read_csv(path, sep=sep)  # pandas infers gzip from the extension
     df = _standardize_columns(df)
 
     cols_upper = {c.upper(): c for c in df.columns}
@@ -80,10 +85,13 @@ def load_mt_ohlcv_csv(
     timestamp_is_bar_open=True, the index is shifted forward by bar_duration.
     """
     path = Path(path)
+    if not path.exists() and Path(f"{path}.gz").exists():
+        path = Path(f"{path}.gz")   # accept a gzipped dataset transparently
     if not path.exists():
         raise FileNotFoundError(
-            f"CSV not found: {path}. Run `python mt5_data.py download` on the "
-            f"MT5 machine (or drop an MT4/MT5 export there) or change CFG.csv_path."
+            f"CSV not found: {path}. Export it with mql5/ExportHistoryCSV.mq5, "
+            f"run `python mt5_data.py download` on the MT5 machine, or change "
+            f"CFG.csv_path."
         )
 
     df = _read_mt_csv(path)

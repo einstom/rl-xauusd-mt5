@@ -79,9 +79,20 @@ and save the file as `data/XAUUSD_M1.csv`. The loader auto-detects MT5's
 native tab-separated `<DATE> <TIME> <OPEN> …` format as well as the
 comma-separated `Time (EET),Open,…` flavour.
 
-Broker history depth varies — raise *Options → Charts → Max bars in chart* in
-MT5 first, and in the Bars tab request the range before exporting. If your
-broker's server time is not EET/EEST, change `CFG.source_tz`.
+**c) One-click MQL5 script** — most reliable, pulls the full server history:
+open `mql5/ExportHistoryCSV.mq5` in MetaEditor (F4), compile (F7), open any
+XAUUSD chart, drag the script from Navigator → Scripts onto it, set the start
+year, OK. The file lands in *File → Open Data Folder →* `MQL5/Files/XAUUSD_M1.csv`.
+
+Broker history depth varies — set *Options → Charts → Max bars in chart* to
+Unlimited in MT5 first. If your broker's server time is not EET/EEST, change
+`CFG.source_tz` (IC Markets is EET/EEST).
+
+To train in a cloud session (Claude Code on the web), get the dataset into
+the repo: `gzip -9 data/XAUUSD_M1.csv`, then
+`git add -f data/XAUUSD_M1.csv.gz && git commit -m "data" && git push`
+(`-f` because `data/` is gitignored; GitHub caps files at 100 MB — the gzip
+of ~10 years of M1 fits). The loader reads the `.gz` transparently.
 
 ### 3. Audit the features (optional but recommended)
 
