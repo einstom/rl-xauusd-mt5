@@ -17,7 +17,8 @@ OHLCV = ["Open", "High", "Low", "Close", "Volume"]
 
 def _standardize_columns(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
-    df.columns = [c.strip() for c in df.columns]
+    # Strip whitespace and the <ANGLE> brackets of MT5's native Bars export.
+    df.columns = [c.strip().strip("<>") for c in df.columns]
 
     # Handle small variations in capitalization or accidental trailing spaces.
     mapping = {}
@@ -27,8 +28,39 @@ def _standardize_columns(df: pd.DataFrame) -> pd.DataFrame:
         if low == "high": mapping[c] = "High"
         if low == "low": mapping[c] = "Low"
         if low == "close": mapping[c] = "Close"
+        # Prefer TICKVOL (always populated) over VOL (usually 0 for CFD gold).
         if low in ("volume", "tick_volume", "tickvol"): mapping[c] = "Volume"
     return df.rename(columns=mapping)
+
+
+def _read_mt_csv(path: Path) -> pd.DataFrame:
+    """Read either CSV flavour this project accepts:
+
+    * comma-separated with a combined time column — mt5_data.py download /
+      MT4-style exports:  ``Time (EET),Open,High,Low,Close,Volume``
+    * MT5's built-in Bars export (Ctrl+U → Bars → Export Bars): tab-separated
+      with ``<DATE>\t<TIME>\t<OPEN>…<TICKVOL>`` — the no-code path to get M1
+      history out of the macOS/Windows terminal for research.
+
+    For the second flavour DATE and TIME are combined into a single
+    'Time (EET)' column so both continue through one code path.
+    """
+    with open(path, "r", encoding="utf-8-sig") as f:
+        first_line = f.readline()
+    sep = "\t" if "\t" in first_line else ","
+
+    df = pd.read_csv(path, sep=sep)
+    df = _standardize_columns(df)
+
+    cols_upper = {c.upper(): c for c in df.columns}
+    if "DATE" in cols_upper:
+        date = df[cols_upper["DATE"]].astype(str).str.strip()
+        if "TIME" in cols_upper:
+            time = df[cols_upper["TIME"]].astype(str).str.strip()
+        else:
+            time = "00:00:00"  # D1 exports carry no TIME column
+        df["Time (EET)"] = date + " " + time
+    return df
 
 
 def load_mt_ohlcv_csv(
@@ -54,8 +86,7 @@ def load_mt_ohlcv_csv(
             f"MT5 machine (or drop an MT4/MT5 export there) or change CFG.csv_path."
         )
 
-    df = pd.read_csv(path)
-    df = _standardize_columns(df)
+    df = _read_mt_csv(path)
 
     if time_col not in df.columns:
         # Robust fallback: find a column that starts with Time.

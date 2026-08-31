@@ -61,17 +61,27 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-### 2. Download M1 history from MT5 → CSV
+### 2. Get M1 history from MT5 → CSV
+
+Two equivalent paths; both land at `data/XAUUSD_M1.csv`:
+
+**a) Scripted** (Windows, or macOS via the gateway):
 
 ```bash
 python mt5_data.py check                          # verify terminal + symbol
 python mt5_data.py download --years 10            # writes data/XAUUSD_M1.csv
 ```
 
+**b) Manual export from the MT5 app** — no Python-side MT5 access needed, the
+easiest path on macOS for research: in the terminal press `Ctrl+U` (View →
+Symbols) → select XAUUSD → *Bars* tab → request the M1 range → *Export Bars*,
+and save the file as `data/XAUUSD_M1.csv`. The loader auto-detects MT5's
+native tab-separated `<DATE> <TIME> <OPEN> …` format as well as the
+comma-separated `Time (EET),Open,…` flavour.
+
 Broker history depth varies — raise *Options → Charts → Max bars in chart* in
-MT5 first. Alternatively drop any MT4/MT5-style M1 export at `data/XAUUSD_M1.csv`
-(column `Time (EET)`, format `2020.01.09 01:00:00`) and set `CFG.csv_path`.
-If your broker's server time is not EET/EEST, change `CFG.source_tz`.
+MT5 first, and in the Bars tab request the range before exporting. If your
+broker's server time is not EET/EEST, change `CFG.source_tz`.
 
 ### 3. Audit the features (optional but recommended)
 
@@ -148,6 +158,13 @@ Live, repeat steps 2 → 5 → 6 → 7 on that cadence so the deployed model is
 never older than one step window.
 
 ## Running on macOS (MT5 under Wine) — the gateway
+
+**Research only (train + backtest) needs none of this.** Export M1 history
+straight from the MT5 app (step 2b above) and run steps 3–6 with native macOS
+Python — the whole training/backtest pipeline is OS-agnostic. The gateway
+below is only for driving the terminal from Python on a Mac: automated
+downloads or live trading. If production lives on a Windows box, set the
+gateway aside entirely.
 
 The `MetaTrader5` pip package is **Windows-only**: it talks to the terminal
 over Windows IPC, so native macOS Python can never import it — even though
