@@ -12,19 +12,16 @@ from dataclasses import dataclass
 from typing import Optional
 
 from config import CFG
+from mt5_compat import _HELP, load_mt5
 
-try:
-    import MetaTrader5 as mt5
-except ImportError:  # pragma: no cover - non-Windows dev machines
-    mt5 = None
+# Direct MetaTrader5 package (Windows) or HTTP gateway (MT5_GATEWAY_URL set,
+# for macOS/Linux where the package cannot be imported) — see mt5_compat.py.
+mt5 = load_mt5()
 
 
 def _require_mt5():
     if mt5 is None:
-        raise ImportError(
-            "The MetaTrader5 package is not installed (Windows-only). "
-            "Run this module on the machine that hosts the MT5 terminal."
-        )
+        raise ImportError(_HELP)
     return mt5
 
 

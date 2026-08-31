@@ -37,16 +37,21 @@ train_ppo.py         PPO training, consistency checkpoint selection,
 model_artifacts.py   run_info.json / model / VecNormalize resolution.
 final_holdout_eval.py  One-shot sealed out-of-sample evaluation.
 mt5_data.py          MT5 bridge: historical download → CSV, live closed bars,
-                     EET/EEST-safe time conversion.  (Windows + MT5 terminal)
+                     EET/EEST-safe time conversion.
 mt5_execution.py     order_send bracket orders (entry+SL+TP), fixed-fractional
                      lots from tick value, filling-mode/requote retries.
+mt5_compat.py        MT5 backend resolver: real MetaTrader5 package (Windows)
+                     or the HTTP gateway (macOS/Linux, MT5_GATEWAY_URL).
+mt5_gateway.py       Stdlib-only HTTP gateway run inside the Wine/Windows
+                     Python next to the terminal (macOS/Linux setups).
 live_trading.py      Live H1 loop: bars → features → policy → bracket order.
 ```
 
 ## Step-by-step: run the whole system
 
-Training can happen on any OS. Steps 2 and 8–10 must run on the **Windows**
-machine with a running, logged-in MT5 terminal (algo trading enabled).
+Training can happen on any OS. Steps 2 and 8–10 need a running, logged-in MT5
+terminal with algo trading enabled — directly on **Windows**, or on **macOS**
+via the gateway (see "Running on macOS" below).
 
 ### 1. Install
 
@@ -142,6 +147,51 @@ The walk-forward already simulates "retrain every 6 months, trade the next 6".
 Live, repeat steps 2 → 5 → 6 → 7 on that cadence so the deployed model is
 never older than one step window.
 
+## Running on macOS (MT5 under Wine) — the gateway
+
+The `MetaTrader5` pip package is **Windows-only**: it talks to the terminal
+over Windows IPC, so native macOS Python can never import it — even though
+the MT5 app itself runs fine on a Mac (the official macOS build is a Wine
+wrapper). Installing torch/SB3 into Wine's Windows Python is not realistic,
+so this project splits the work in two processes:
+
+```
+┌───────────── Wine bottle (same one as the MT5 terminal) ─────────────┐
+│  Windows Python:  mt5_gateway.py   (stdlib + MetaTrader5 + numpy)    │
+└───────────────────────────── HTTP 127.0.0.1 ─────────────────────────┘
+┌───────────────────────── native macOS Python ────────────────────────┐
+│  MT5_GATEWAY_URL=http://127.0.0.1:8787                               │
+│  mt5_data.py / mt5_execution.py / live_trading.py  (torch, SB3, …)   │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+1. **Find the Wine prefix of your MT5 app.** For the official MetaQuotes
+   .dmg it is typically
+   `~/Library/Application Support/net.metaquotes.wine.metatrader5` and the
+   bundled wine binary lives inside the `MetaTrader 5.app` bundle (paths vary
+   by version — `find /Applications/MetaTrader\ 5.app -name "wine*" -type f`
+   locates it; CrossOver/PlayOnMac bottles have their own prefix paths).
+2. **Install Windows Python into that same bottle** (python.org
+   `python-3.11.x-amd64.exe`, run it with that wine binary and the
+   `WINEPREFIX` above), then inside it:
+   `wine python.exe -m pip install MetaTrader5 numpy`.
+3. **Start the gateway in the bottle** (MT5 terminal already running &
+   logged in): `wine python.exe mt5_gateway.py --port 8787`.
+4. **On the macOS side** (this repo, native Python):
+
+   ```bash
+   export MT5_GATEWAY_URL=http://127.0.0.1:8787
+   python mt5_data.py check
+   python mt5_data.py download --years 10
+   python live_trading.py --dry-run
+   ```
+
+Every `mt5.*` call is forwarded over localhost JSON-RPC; nothing else about
+the pipeline changes. Optionally set the same `MT5_GATEWAY_TOKEN` on both
+sides to require an auth header. For unattended 24/7 live trading a small
+Windows VPS remains the more robust option — a sleeping MacBook trades
+nothing.
+
 ## Notes and warnings
 
 - **The gate can (and often should) say no.** `gate_passed=false` means the
@@ -149,7 +199,8 @@ never older than one step window.
   to start; `--force` overrides for demo experiments only.
 - Spread/slippage/commission in `config.py` must match your broker before any
   backtest number is meaningful.
-- The `MetaTrader5` Python package is Windows-only; on Linux/macOS use Wine or
-  a Windows VPS for steps 2 and 8–10.
+- The `MetaTrader5` Python package is Windows-only; on macOS/Linux run the
+  gateway inside the terminal's Wine bottle (section above) or use a Windows
+  VPS for steps 2 and 8–10.
 - Nothing here is financial advice; trade a demo account until you have months
   of dry-run/demo evidence.

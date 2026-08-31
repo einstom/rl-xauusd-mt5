@@ -123,7 +123,7 @@ def build_market_row(symbol: str):
 
 def position_state_features(position, row, state: dict) -> np.ndarray:
     """Replicates BracketTradingEnv._position_state_features from live data."""
-    import MetaTrader5 as mt5
+    mt5 = mt5_data.mt5
 
     if position is None:
         return np.zeros(N_POS_FEATURES, dtype=np.float32)
@@ -165,7 +165,7 @@ def build_observation(row, feature_cols, position, state: dict, vecnorm) -> np.n
 # ── One decision ─────────────────────────────────────────────────────────────
 
 def decide_and_act(model, vecnorm, sl_mults, tp_rs, dry_run: bool) -> None:
-    import MetaTrader5 as mt5
+    mt5 = mt5_data.mt5
 
     symbol = CFG.mt5_symbol
     state = _load_state()
