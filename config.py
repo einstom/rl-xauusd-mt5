@@ -36,13 +36,23 @@ _BARS_PER_YEAR: dict[str, int] = {
 }
 
 
+# Anchor for relative data paths, so scripts work from any working directory.
+_PROJECT_ROOT = Path(__file__).resolve().parent
+
+
 @dataclass
 class ProjectConfig:
     # ── Data source ──────────────────────────────────────────────────────────
-    # M1 CSV produced either by an MT4/MT5 export or by mt5_data.py
-    # (`python mt5_data.py download`).  Column layout: Time (EET), OHLCV.
+    # M1 CSV produced by an MT4/MT5 export, mql5/ExportHistoryCSV.mq5, or
+    # `python mt5_data.py download`.  Column layout: Time (EET), OHLCV.
+    # A relative path is resolved against the project directory (a .gz twin
+    # of the file is also accepted — see data_loader).
     csv_path: Path = Path("data/XAUUSD_M1.csv")
     time_col: str = "Time (EET)"
+
+    def __post_init__(self):
+        if not Path(self.csv_path).is_absolute():
+            self.csv_path = _PROJECT_ROOT / self.csv_path
 
     # Many brokers call this EET but actually follow EET/EEST server time.
     # Europe/Helsinki is a practical EET/EEST timezone choice.
