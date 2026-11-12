@@ -13,6 +13,7 @@ source .venv/bin/activate                 # ALWAYS activate first ((base) conda 
 python features.py                        # data load + 25-feature collinearity audit
 python train_ppo.py --mode single --timesteps 120000 --n-envs 4 --device cpu   # smoke
 caffeinate -i python train_ppo.py --mode sliding --timesteps 1000000 --n-envs 4 --device cpu
+python analyze_results.py                 # per-fold diagnostics + drawdown + cost sensitivity
 python final_holdout_eval.py              # sealed holdout — run ONCE per frozen model
 python live_trading.py --dry-run          # needs MT5 access (Windows or gateway)
 ```
@@ -56,8 +57,12 @@ both formats + gz, path resolves against the project dir). Regenerate with
 ## Results to look at after a sliding run
 
 `models/sliding_walk_forward_summary.csv` (per-fold TEST metrics),
-`models/sliding_oos_equity.csv` (stitched OOS equity), gate verdict in the
-console + `models/run_info.json` / `NO_DEPLOY.txt`.
+`models/sliding_oos_equity.csv` (stitched OOS equity),
+`models/sliding_oos_trades.csv` + per-fold `test_trades.csv`/`test_equity.csv`
+(trade-level diagnostics — feed them to `python analyze_results.py`), gate
+verdict in the console + `models/run_info.json` / `NO_DEPLOY.txt`.
+Cost-stress by retraining with `--spread/--slippage/--commission` overrides;
+`analyze_results.py` only re-prices logged trades (first-order bound).
 
 ## Deploying to Windows (production)
 
