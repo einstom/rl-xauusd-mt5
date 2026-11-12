@@ -458,6 +458,8 @@ def train(
         "dd_penalty": dd_penalty,
         "risk_fraction": CFG.risk_fraction,
         "spread_price": CFG.spread_price,
+        "slippage_price": CFG.slippage_price,
+        "commission_per_trade": CFG.commission_per_trade,
     }
     best_model_zip = Path(out_dir) / "best_model" / "best_model.zip"
     best_model_vecnorm = Path(out_dir) / "best_model" / "best_model_vecnorm.pkl"
@@ -686,8 +688,13 @@ def train_sliding_walk_forward(
         model, vp = _load_fold_model(fold_dir)
         val_rep = evaluate_on_split(model, vp, m1, feature_cols, va)
         test_eq, test_trades, test_rep = _rollout_on_split(model, vp, m1, feature_cols, te)
+        # Persist per-fold test artifacts so analyze_results.py can diagnose
+        # losing folds and re-price trades under different cost assumptions.
+        test_eq.to_csv(Path(fold_dir) / "test_equity.csv")
         test_equities.append(test_eq)
         if test_trades is not None and not test_trades.empty:
+            test_trades = test_trades.assign(fold=k)
+            test_trades.to_csv(Path(fold_dir) / "test_trades.csv", index=False)
             test_trade_logs.append(test_trades)
 
         summary_rows.append({
@@ -729,6 +736,7 @@ def train_sliding_walk_forward(
     stitched_df.to_csv(stitched_path)
 
     all_trades = pd.concat(test_trade_logs, ignore_index=True) if test_trade_logs else pd.DataFrame()
+    all_trades.to_csv(Path(out_dir) / "sliding_oos_trades.csv", index=False)
     oos = full_report(stitched_df, all_trades, initial_equity=CFG.initial_equity,
                       periods_per_year=CFG.periods_per_year)["value"].to_dict()
 
@@ -767,7 +775,22 @@ if __name__ == "__main__":
     parser.add_argument("--dd-penalty", type=float, default=0.8,
                         help="reward-units subtracted per 1%% max drawdown in checkpoint selection")
     parser.add_argument("--out-dir", default="models")
+    parser.add_argument("--spread", type=float, default=None,
+                        help="override CFG.spread_price (XAUUSD price units, full spread)")
+    parser.add_argument("--slippage", type=float, default=None,
+                        help="override CFG.slippage_price (price units per side)")
+    parser.add_argument("--commission", type=float, default=None,
+                        help="override CFG.commission_per_trade (account cash per round trip)")
     args = parser.parse_args()
+
+    if args.spread is not None:
+        CFG.spread_price = args.spread
+    if args.slippage is not None:
+        CFG.slippage_price = args.slippage
+    if args.commission is not None:
+        CFG.commission_per_trade = args.commission
+    print(f"Costs : spread={CFG.spread_price}  slippage={CFG.slippage_price}/side  "
+          f"commission={CFG.commission_per_trade}/trade")
 
     if args.mode == "sliding":
         train_sliding_walk_forward(
